@@ -83,7 +83,7 @@ class ebsqs_worker(object):
             if delay_seconds:
                 msg_dict['delay_seconds'] = delay_seconds
             # jsonify the message and convert to bytes
-            message_body = json.dumps(msg_dict).encode()
+            message_body = json.dumps(msg_dict)
             sqs = boto3.client('sqs', conf.settings.EBSQS_REGION)
             response = sqs.send_message(
                 QueueUrl = conf.settings.EBSQS_MQ_URL,
