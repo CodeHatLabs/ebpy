@@ -1,7 +1,5 @@
-import codecs
-from hashlib import sha1
 from importlib import import_module
-import pickle
+import json
 from uuid import uuid4
 
 import boto3
@@ -9,16 +7,8 @@ import boto3
 from ebpy import conf
 
 
-class SignatureMismatch(Exception):
-    pass
-
-
 class NotAsyncReceiver(Exception):
     pass
-
-
-encode64 = codecs.getencoder('base64')
-decode64 = codecs.getdecoder('base64')
 
 
 def get_worker(worker_key):
@@ -34,10 +24,6 @@ def dispatch_message(msg_dict):
     """load a worker function and call it"""
     worker_function = get_worker(msg_dict['worker_key'])
     worker_function(*msg_dict['args'], **msg_dict['kwargs'])
-
-
-def _get_signature(message_pickle, message_secret_bytes):
-    return sha1(message_pickle + message_secret_bytes).hexdigest()
 
 
 def _sns_publish(msg_dict):
@@ -59,20 +45,8 @@ def receive_message(raw_http_content):
     """receive message handler"""
     if not conf.settings.EBSQS_IS_RECEIVER:
         raise NotAsyncReceiver()
-    # open the message
-    msg_envelope = pickle.loads(decode64(raw_http_content)[0])
-    msg_pickle = msg_envelope['msg_pickle']
-    msg_dict = pickle.loads(msg_pickle)
-    # validate the message was signed with EBSQS_SECRET_BYTES
-    msg_signature = _get_signature(
-            msg_pickle,
-            conf.settings.EBSQS_SECRET_BYTES
-            )
-    if msg_signature != msg_envelope['msg_signature']:
-        # log the signature mismatch to sns
-        msg_dict['status'] = 'Signature Mismatch'
-        _sns_publish(msg_dict)
-        raise SignatureMismatch()
+    # decode the message
+    msg_dict = json.loads(raw_http_content.decode())
     # log the message to sns
     msg_dict['status'] = 'Received'
     _sns_publish(msg_dict)
@@ -108,23 +82,12 @@ class ebsqs_worker(object):
                 }
             if delay_seconds:
                 msg_dict['delay_seconds'] = delay_seconds
-            # pickle the message and put it in the envelope
-            # sign the envelope with EBSQS_SECRET_BYTES as a salt
-            msg_pickle = pickle.dumps(msg_dict)
-            msg_envelope = {
-                'msg_pickle': msg_pickle,
-                'msg_signature': _get_signature(
-                    msg_pickle,
-                    conf.settings.EBSQS_SECRET_BYTES
-                    )
-                }
-            # pickle the envelope and encode it to base64 because SQS
-            #   rejects the control characters used by pickle
-            message_body_64 = encode64(pickle.dumps(msg_envelope))[0].decode()
+            # jsonify the message and convert to bytes
+            message_body = json.dumps(msg_dict).encode()
             sqs = boto3.client('sqs', conf.settings.EBSQS_REGION)
             response = sqs.send_message(
                 QueueUrl = conf.settings.EBSQS_MQ_URL,
-                MessageBody = message_body_64,
+                MessageBody = message_body,
                 DelaySeconds = delay_seconds
                 )
             # log the message to sns
