@@ -7,7 +7,7 @@ import boto3
 from ebpy import conf
 
 
-class NotAsyncReceiver(Exception):
+class NotQueueReceiver(Exception):
     pass
 
 
@@ -44,7 +44,7 @@ def _sns_publish(msg_dict):
 def receive_message(raw_http_content):
     """receive message handler"""
     if not conf.settings.EBSQS_IS_RECEIVER:
-        raise NotAsyncReceiver()
+        raise NotQueueReceiver()
     # decode the message
     msg_dict = json.loads(raw_http_content.decode())
     # log the message to sns
@@ -70,7 +70,7 @@ class ebsqs_worker(object):
     def __call__(self, *args, **kwargs):
         self.worker_function(*args, **kwargs)
 
-    def async(self, *args, delay_seconds=0, **kwargs):
+    def queue(self, *args, delay_seconds=0, **kwargs):
         if conf.settings.EBSQS_RUN_LOCAL or not conf.settings.EBSQS_MQ_URL:
             self.__call__(*args, **kwargs)
         else:
@@ -112,7 +112,7 @@ class ebsqs_cron(object):
                 raise self.http404_exception_class()
             if hasattr(self, 'http404_response'):
                 return self.http404_response
-            raise NotAsyncReceiver()
+            raise NotQueueReceiver()
         sns_dict = {
             'status': 'Launch Cron',
             'cron': self.cron_name,

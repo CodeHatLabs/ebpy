@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='ebpy',
-    version=0.0,
+    version=0.1,
     author='Code Hat Labs, LLC',
     author_email='dev@codehatlabs.com',
     url='https://github.com/CodeHatLabs/ebpy',
