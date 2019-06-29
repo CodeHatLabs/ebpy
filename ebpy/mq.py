@@ -1,3 +1,4 @@
+from logging import getLogger; logger = getLogger(__name__)
 from importlib import import_module
 import json
 from uuid import uuid4
@@ -44,6 +45,7 @@ def _sns_publish(msg_dict):
 def receive_message(raw_http_content):
     """receive message handler"""
     if not conf.settings.EBSQS_IS_RECEIVER:
+        logger.warning("receive_message called with EBSQS_IS_RECEIVER == False")
         raise NotQueueReceiver()
     # decode the message
     msg_dict = json.loads(raw_http_content.decode())
@@ -72,6 +74,7 @@ class ebsqs_worker(object):
 
     def queue(self, *args, delay_seconds=0, **kwargs):
         if conf.settings.EBSQS_RUN_LOCAL or not conf.settings.EBSQS_MQ_URL:
+            logger.info("ebsqs_worker.queue called with RUN_LOCAL or not EBSQS_MQ_URL")
             self.__call__(*args, **kwargs)
         else:
             msg_dict = {
@@ -108,6 +111,7 @@ class ebsqs_cron(object):
 
     def __call__(self, request):
         if not conf.settings.EBSQS_IS_RECEIVER:
+            logger.warning("ebsqs_cron called with EBSQS_IS_RECEIVER == False")
             if hasattr(self, 'http404_exception_class'):
                 raise self.http404_exception_class()
             if hasattr(self, 'http404_response'):
